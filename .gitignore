@@ -50,7 +50,8 @@ rsconnect/
 .Rproj.user
 
 # For Mac
-.DS_Store
+*.DS_Store
+
 
 # Don't need the HTML version of the readme
 README.html
@@ -62,5 +63,7 @@ README.html
 
 # Files too large
 /data/raw/detection_histories_all_long.csv
+/data/cleaned/detections.RDS
+/data/cleaned/sp_inputs.RDS
 
 

@@ -15,11 +15,13 @@ library(reshape2)
 #or if the camera wasn't surveyed at all (surv = 0). 
 
 #Columns are 'site', 'date', 'class' (or 'species'), 
-#'n_photos', and 'surv' (0/1 if surveyed on this date)
+#'n_photos' (or could be 'detected' 0/1), 
+#and 'surv' (0/1 if surveyed on this date)
 
 dh_long <- fread('data/raw/detection_histories_all_long.csv')
 head(dh_long)
-sort(unique(dh_long$site)); length(unique(dh_long$site))
+sort(unique(dh_long$site))
+(n_sites <- length(unique(dh_long$site)))
 
 
 ## Establish sampling periods (YEAR-SEASONS) -----------------------------------
@@ -35,23 +37,24 @@ sort(unique(dh_long$site)); length(unique(dh_long$site))
 
 dates_primary <- data.frame('season' = rep(c('wet','cool','dry'), length.out = (n_yrs+1) * n_seasons),
                             'season_year' = rep((year(beg)):year(end), each = n_seasons), 
-                            #wet seasons will be called 'wet_2019' even tho it starts Dec 2018
+                            #wet seasons will be called 'wet_2019' even tho it starts Dec 2018 (hence -1)
                             'year' = c((year(beg)-1), rep((year(beg)):(year(end)-1), each = n_seasons), rep(year(end), n_seasons-1)), 
-                            #hacky... but the dates need to start a year prior 
                             'start' = rep(c('12-01','05-01','08-01'), length.out = (n_yrs+1) * n_seasons))
 
 dates_primary$primary <- paste(dates_primary$season_year, dates_primary$season, sep = '_')
 dates_primary$start <- as.POSIXct(strptime(paste(dates_primary$year, dates_primary$start, sep = '-'),
                                            format = '%Y-%m-%d'), tz = 'Africa/Blantyre')
+
+#arrange in order and add 'end' dates
 dates_primary <- dates_primary %>% arrange(start) %>% 
                                    select(-season_year, -year) %>%
                                    mutate(end = lead(start) - days(1)) 
-                                   #subtract 1 to not include the next start date
+                                   #subtract 1 to not include the next season's start date
 
-#add last end date
+#add last end date manually
 dates_primary[dates_primary$primary == '2024_dry',]$end <- as.POSIXct('2024-11-30', tz = 'Africa/Blantyre') 
 
-#list all dates
+#list all dates between start/end
 dates <- format(as.Date(beg) + days(0:(n_days)), format = '%Y-%m-%d') 
 dates_df <- data.frame('date' = as.POSIXct(strptime(dates, '%Y-%m-%d'), tz = 'Africa/Blantyre'))
 
@@ -64,7 +67,7 @@ dates_df <- fuzzy_left_join(dates_df, dates_primary,
 dates_df <- dates_df %>% select(date, primary)
 
 #set secondary periods (weeks)
-secondary_length <- 7
+secondary_length <- 7 #number of days
 dates_df <- dates_df %>% 
             group_by(primary) %>% 
             mutate(secondary = ceiling(row_number() / secondary_length)) %>% 
@@ -160,10 +163,10 @@ head(dh_weekly)
 sum(dh_long$n_photos, na.rm = TRUE) 
 
 #read in 'fence' covariate (is each site north or south of the fence)
-env_covar <- fread('data/cleaned/cleaned_covariates.csv')
+env_covar <- fread('data/raw/covariates.csv')
 
 #summarize by species (n sites, n photos, etc.)
-dh_long_fence <- dh_long %>% left_join(env_covar %>% select(Site, fence), by = c('site' = 'Site'))
+dh_long_fence <- dh_long %>% left_join(env_covar %>% select(site, fence), by = 'site')
 sp_summary <- dh_long_fence %>%
                   group_by(class, fence) %>%
                   filter(surv == 1) %>%
@@ -201,7 +204,8 @@ surv_dates <- dh_long %>% filter(surv == 1, class == 'elephant') %>%
             n_weeks_surveyed = length(unique(occasion)))
 
 surv_dates %>%
-  arrange(n_days_surveyed) #min 1 day surveyed (site H06-B had only blank photos -- won't break the model but should have filtered it)
+  arrange(n_days_surveyed) 
+  #min 1 day surveyed (site H06-B had only blank photos -- won't break the model but should filter it)
 
 summary(surv_dates$n_days_surveyed) #mean 733 total days surveyed (range 1-2061)
 
@@ -277,36 +281,25 @@ dh_weekly <- dh_weekly %>% map(~ .x %>%
                                )
 head(dh_weekly$aardvark)
 
-#for each species, we want an array with dimensions site_seasons*years*weeks, or sites*year_seasons*weeks
+#for each species, we want an array with dimensions sites*year_seasons*weeks
 #values will be NA, 0, or 1
 
 sapply(dh_weekly$aardvark, class) #check column classes
 
 #transform to arrays using 'acast' and convert n_photos to 0/1 (preserving NAs)
 
-#site_seasons * years
-dh_arrays_season <- dh_weekly %>% map(~ .x %>%
-                                       select(site_season, year, week, n_photos) %>%
-                                       mutate(n_photos = ifelse(is.na(n_photos), NA, as.numeric(n_photos > 0))) %>%
-                                       acast(site_season ~ year ~ week, value.var = 'n_photos'))
-
-#sites * year_seasons
+#sites * year_seasons (this is the structure we want)
 dh_arrays_year <- dh_weekly %>% map(~ .x %>%
                                      select(site, year_season, week, n_photos) %>%
                                      mutate(n_photos = ifelse(is.na(n_photos), NA, as.numeric(n_photos > 0))) %>%
                                      acast(site ~ year_season ~ week, value.var = 'n_photos'))
 
-
-names(dh_arrays_season)
-head(dh_arrays_season$elephant)
-  dim(dh_arrays_season$elephant)
-  n_sites * n_seasons #check sites*seasons
+#qc
 head(dh_arrays_year$elephant)
-  dim(dh_arrays_year$elephant) #we have 1 extra season here (haven't deleted the first incomplete season yet, dry_2018)
-  n_seasons * 6
+  dim(dh_arrays_year$elephant) #n_sites, n_primary, n_wks
+  n_primary #we have 1 extra season here (haven't deleted the first incomplete season yet, dry_2018)
   
 #save
-saveRDS(dh_arrays_season, 'data/cleaned/detection_arrays_seasonal.RDS')
 saveRDS(dh_arrays_year, 'data/cleaned/detection_arrays_yearly.RDS')
 
 ## Move on now to 01b_prep_covariates.R

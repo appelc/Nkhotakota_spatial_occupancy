@@ -11,36 +11,31 @@ library(reshape2)
 dh_arrays <- readRDS('data/cleaned/detection_arrays_yearly.RDS')
 
 #site-level envir covariates
-env_covar <- fread('data/cleaned/cleaned_covariates.csv')
+env_covar <- fread('data/raw/covariates.csv')
 
 
 ## Format structural covariates (OCCUPANCY) ------------------------------------
 
-dim(dh_arrays$elephant) #200 site-seasons, 19 year-seasons, ≤22 weeks
+dim(dh_arrays[[1]]) #sites, year-seasons, weeks (max)
 
-#site effect (vector w/ length 200)
+#site effect (vector w/ length n_sites)
 (site_covar <- rownames(dh_arrays$elephant[,,1]))
   head(site_covar,10)
   (n_sites <- length(site_covar))
 
-#hexagon effect (vector w/ length 200)
-hex_covar <- sapply(strsplit(as.character(site_covar), '-'), '[', 1)
-  head(hex_covar); length(hex_covar)
-  (n_hex <- length(unique(hex_covar)))
-  
-#year-season effect (200x19 matrix)
+#year-season effect (n_sites*n_year_seasons matrix)
 (year_seasons <- colnames(dh_arrays$elephant[,,1]))
 year_season_covar <- matrix(rep(year_seasons, times = n_sites), nrow = n_sites, byrow = TRUE)
   head(year_season_covar); dim(year_season_covar)
-  (n_year_seasons <- ncol(year_season_covar))
+  (n_year_seasons <- ncol(year_season_covar)) #remember 'year_seasons' are primary periods
 
-#season (200x19 matrix)
+#season (n_sites*n_year_seasons matrix)
 (seasons <- sapply(strsplit(year_seasons, '_'), '[', 2))
 season_covar <- matrix(rep(seasons, times = n_sites), nrow = n_sites, byrow = TRUE)
   head(season_covar); dim(season_covar)
   (n_seasons <- length(unique(seasons)))
   
-#year effect (200x19 matrix)
+#year effect (n_sites*n_year_seasons matrix)
 (years <- sapply(strsplit(year_seasons, '_'), '[', 1))
 year_covar <- matrix(rep(years, times = n_sites), nrow = n_sites, byrow = TRUE)
   head(year_covar); dim(year_covar)
@@ -49,66 +44,33 @@ year_covar <- matrix(rep(years, times = n_sites), nrow = n_sites, byrow = TRUE)
 
 ## Format environmental covariates (OCCUPANCY) ---------------------------------
 
-dim(dh_arrays$elephant) #200 sites, 19 site-years years, 22 weeks
-
-#should all be vectors w/ length 200
+#these need to be vectors w/ length n_sites
 
 names(env_covar)
 
 #which to keep?
-# (covar_names <- names(env_covar)[grepl('Site|3x3|dist|fence', names(env_covar))])
-(covar_names <- c('Site','elev_mean_3x3','pct_slope_mean_3x3','tree_vol_mean_3x3',
+(covar_names <- c('site','elev_mean_3x3','pct_slope_mean_3x3','tree_vol_mean_3x3',
                   'dist_dambo_mean_3x3','dist_rivers_mean_3x3','distance_to_perimeter','fence'))
-head(env_covar[,..covar_names]) #these are NOT standardized (we'll do it in the model specification -- or below for N/S separately)
+head(env_covar[,..covar_names]) 
+#these are NOT standardized (we'll do it in the model specification via scale() -- or below for N/S separately)
 
 #keep only the select covariates
 env_covar <- env_covar %>% select(all_of(covar_names))    
-length(unique(env_covar$Site)) #all 210 sites here
+length(unique(env_covar$site)) #all sites with covariates here
 
 #keep only sites that have data in det histories
 site_covar
-env_covar <- env_covar %>% filter(Site %in% site_covar)
-length(unique(env_covar$Site)) #200 now
+env_covar <- env_covar %>% filter(site %in% site_covar)
+length(unique(env_covar$Site)) #should match n_sites now
 
-#use South/North for 'fence' instead of 0/1
+#use North/South for 'fence' instead of 0/1
 env_covar$fence <- ifelse(env_covar$fence == 0, 'North', 'South')
 
-#make sure it's sorted by site
-env_covar <- env_covar %>% arrange(Site)
-
-# #need to repeat each 3x to match site_season format
-# site_covar_df <- data.frame('Site' = site_covar)
-# env_covar_expanded <- env_covar %>% 
-#                           select(all_of(covar_names)) %>%
-#                           right_join(site_covar_df, by = 'Site')
-
-# nrow(env_covar_expanded); nrow(site_covar_df) #should match
-# length(unique(env_covar_expanded$Site)) #should be 200 sites
-
-#combine and save
-occ_covar <- list('site' = site_covar, 
-                  'hex' = hex_covar,
-                  'year_season' = year_season_covar,
-                  'season' = season_covar, 
-                  'year' = year_covar,
-                  'elev' = env_covar$elev_mean_3x3,
-                  'slope' = env_covar$pct_slope_mean_3x3,
-                  'tree_vol' = env_covar$tree_vol_mean_3x3,
-                  'dist_dambo' = env_covar$dist_dambo_mean_3x3,
-                  'dist_rivers' = env_covar$dist_rivers_mean_3x3,
-                  'dist_boundary' = env_covar$distance_to_perimeter,
-                  'fence' = env_covar$fence
-                  )
-str(occ_covar)
-#make sure they are all either vectors (length 200) or matrices (200 x 19)
-
-#saveRDS(occ_covar, 'H_sp_occ/occ_covar.RDS')
-
-#save
-#saveRDS(env_covar_expanded, 'sp_occ/env_covar.RDS')
+#sort by site
+env_covar <- env_covar %>% arrange(site)
 
 
-## Log distance covariates -----------------------------------------------------
+## Log-transform the distance covariates ---------------------------------------
 
 head(env_covar)
 
@@ -174,7 +136,6 @@ hist(env_covar_scaled$dist_dambo_log_scaled)
 
 #combine and save
 occ_covar_scaled <- list('site' = site_covar, 
-                         'hex' = hex_covar,
                          'year_season' = year_season_covar,
                          'season' = season_covar, 
                          'year' = year_covar,
@@ -198,10 +159,10 @@ occ_covar_scaled <- list('site' = site_covar,
                          'dist_boundary_log_scaledNS' = env_covar_scaled$dist_perimeter_log_scaled,
                          'fence' = env_covar_scaled$fence
 )
-str(occ_covar_scaled) #make sure they are all either vectors (length 200) or matrices (200 x 19)
+str(occ_covar_scaled) #make sure they are all either vectors (length n_sites) or matrices (n_sites * n_year_seasons)
 
 #save
-saveRDS(occ_covar_scaled, 'H_sp_occ/occ_covar.RDS')
+saveRDS(occ_covar_scaled, 'data/cleaned/occ_covar.RDS')
 
 #also save mean/SD and min/max (we'll need them for prediction)
 covar_means_grouped <- env_covar %>% 
@@ -216,36 +177,25 @@ covar_means_grouped <- env_covar %>%
                   max = max(value, na.rm = TRUE),
                   .groups = 'drop')
 
-write.csv(covar_means_grouped, 'H_sp_occ/covar_mean_sd_scaledNS.csv')
+write.csv(covar_means_grouped, 'data/cleaned/covar_mean_sd_scaledNS.csv')
 
 
 ## Format coordinates ----------------------------------------------------------
 
-plot_coords <- fread('A_data/raw/covariates/MonitoringPlots_corrected_031825_withFence.csv')
+plot_coords <- fread('data/raw/coordinates.csv')
 head(plot_coords)
-
-#keep only relevant columns
-plot_coords <- plot_coords %>% select(Site, UTMXcorrec, UTMYcorrec)
-sort(unique(plot_coords$Site))
-length(unique(plot_coords$Site)) #has all 210
+length(unique(plot_coords$site)) #has all 210
 
 #keep only sites that have data in det histories
 site_covar
-plot_coords <- plot_coords %>% filter(Site %in% site_covar)
-length(unique(plot_coords$Site)) #200 now
+plot_coords <- plot_coords %>% filter(site %in% site_covar)
+length(unique(plot_coords$site)) #now matches n_sites
 
 #make sure it's sorted by site
-plot_coords <- plot_coords %>% arrange(Site)
-
-#repeat each 3x to match site_season format
-# plot_coords_expanded <- plot_coords %>% right_join(site_covar_df, by = 'Site') %>%
-#                                         mutate(site_season = paste(Site, rep(c('wet','cool','dry'), length.out = length(Site)),sep = '_'))
-
-dim(plot_coords)
-head(plot_coords)
+plot_coords <- plot_coords %>% arrange(site)
 
 #save
-saveRDS(plot_coords_expanded, 'H_sp_occ/coords.RDS')
+saveRDS(plot_coords, 'data/cleaned/coords.RDS')
 
 
-## Now go to script '02_prep_inputs.R'
+## Now go to script '01c_prep_inputs.R'
