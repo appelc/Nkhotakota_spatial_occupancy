@@ -49,7 +49,18 @@ po/*~
 rsconnect/
 .Rproj.user
 
+# For Mac
+.DS_Store
+
+# Don't need the HTML version of the readme
+README.html
+
 ######
 
 # Sensitive/private data
 /private/
+
+# Files too large
+/data/raw/detection_histories_all_long.csv
+
+
