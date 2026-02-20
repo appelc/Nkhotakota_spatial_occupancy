@@ -50,7 +50,7 @@ rsconnect/
 .Rproj.user
 
 # For Mac
-*.DS_Store
+**/.DS_Store
 
 
 # Don't need the HTML version of the readme
@@ -62,8 +62,18 @@ README.html
 /private/
 
 # Files too large
+/data/raw/covar_for_prediction_30m.RDS
+/data/raw/covar_for_prediction_100m.RDS
+/data/raw/covariates_resampled_30m.csv
+/data/raw/covariates_resampled_100m.csv
 /data/raw/detection_histories_all_long.csv
-/data/cleaned/detections.RDS
+/data/cleaned/detections.RDS 
 /data/cleaned/sp_inputs.RDS
+#actually do I need any contents of the /cleaned/ folder? decide
+
+# Intended for results objects
+/evaluation/
+/outputs/
+/predictions/
 
 
