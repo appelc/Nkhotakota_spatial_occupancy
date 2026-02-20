@@ -36,9 +36,9 @@ The code has 3 main steps:
 
 *Compute derived parameters, create plots, conduct post-hoc trend analysis*
 
--   `03a_prediction.R`: takes model outputs, new covariate values, and spatial coordinates to generate predictions at new sites. *(Recommended to use HPC if possible.)*
+-   `03a_predict_values.R`: takes model outputs, new covariate values, and spatial coordinates to generate predictions at new sites. *(Recommended to use HPC if possible.)*
 
--   `03b_prediction_maps.R`: reads in prediction data for all species to create distribution maps (FIG 4)
+-   `03b_predict_maps.R`: reads in prediction data for all species to create distribution maps (FIG 4)
 
 -   `03c_derive_parameters.R`: left off cleaning up here. I copied and pasted the rest I think I'll need into the code folder (except extras like "checking", study area map, etc...)
 
